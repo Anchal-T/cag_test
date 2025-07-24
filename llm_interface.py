@@ -1,40 +1,42 @@
-from google import genai
 import os
 from dotenv import load_dotenv
+from google import genai
+from google.genai.types import GenerateContentConfig, ThinkingConfig
 
 def configure_llm():
-    """Configures the Gemini API."""
+    """Initializes the Gemini client."""
     load_dotenv()
-    try:
-        genai.configure(api_key=os.getenv("GEMINI_API_KEY"))
-        model = genai.GenerativeModel('gemini-2.5-flash')
-        return model
-    except Exception as e:
-        print(f"Error configuring Gemini API: {e}")
+    api_key = os.getenv("GEMINI_API_KEY") or os.getenv("GOOGLE_API_KEY")
+    if not api_key:
+        print("Error: GEMINI_API_KEY or GOOGLE_API_KEY not set")
         return None
 
-def get_llm_response(model, query, context_docs):
-    """Formats a prompt and gets a response from the Gemini API."""
-    if not model:
+    try:
+        client = genai.Client(api_key=api_key)
+        return client
+    except Exception as e:
+        print(f"Error initializing Gemini client: {e}")
+        return None
+
+def get_llm_response(client, query, context_docs):
+    """Generates a response based on context documents."""
+    if not client:
         return "LLM service is not available."
 
-    context = "\n\n---\n\n".join([doc['doc']['text'] for doc in context_docs])
-    
-    prompt = f"""
-    You are a helpful AI assistant for answering questions based on research papers.
-    Based *only* on the following context, please provide a concise answer to the user's question.
-    If the context does not contain the answer, state that you couldn't find relevant information.
+    context = "\n\n---\n\n".join(doc['doc']['content'] for doc in context_docs)
+    prompt = (
+        "You are a helpful AI assistant answering user questions from research papers.\n"
+        "Use *only* the provided context. If there's no answer in the context, state that clearly.\n\n"
+        f"Context:\n{context}\n\n"
+        f"Question: {query}\n\nAnswer:"
+    )
 
-    Context:
-    {context}
-
-    Question: {query}
-
-    Answer:
-    """
-    
     try:
-        response = model.generate_content(prompt)
-        return response.text
+        resp = client.models.generate_content(
+            model="gemini-2.5-flash",
+            contents=prompt,
+            config=GenerateContentConfig(thinking_config=ThinkingConfig(thinking_budget=0))
+        )
+        return resp.text
     except Exception as e:
-        return f"An error occurred while communicating with the LLM: {e}"        
+        return f"Error from Gemini API: {e}"

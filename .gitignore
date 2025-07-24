@@ -2,3 +2,4 @@ venv/
 arxiv_papers.json
 rag_data.pkl
 .env
+__pycache__

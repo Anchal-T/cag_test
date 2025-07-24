@@ -140,7 +140,7 @@ if __name__ == "__main__":
     # pip install PyPDF2 requests
     
     print("Fetching arXiv papers...")
-    papers = get_arxiv_paper_content("transformer", 10)  # Get 10 papers as example
+    papers = get_arxiv_paper_content("neuralnetworks", 10)  # Get 10 papers as example
     
     # Save to JSON (papers already contains only name and content)
     json_filename = save_to_json(papers, "arxiv_papers.json")
