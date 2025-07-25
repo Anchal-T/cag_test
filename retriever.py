@@ -1,6 +1,7 @@
+# File: retriever.py
 import numpy as np
 from sklearn.metrics.pairwise import cosine_similarity
-from tokenize_words import preprocess
+from data_processor import preprocess
 
 def search_tfidf(query, vectorizer, tfidf_matrix):
     """Performs TF-IDF search using a pre-fitted vectorizer and matrix."""
@@ -14,7 +15,7 @@ def search_bm25(query, bm25_model):
     scores = bm25_model.get_scores(tokenized_query)
     return scores
 
-def hybrid_search(query, sample_papers, bm25_model, vectorizer, tfidf_matrix, top_k=2, bm25_weight=0.6, tfidf_weight=0.4):
+def hybrid_search(query, documents, bm25_model, vectorizer, tfidf_matrix, top_k=2, bm25_weight=0.6, tfidf_weight=0.4):
     """
     Performs a hybrid search by combining normalized BM25 and TF-IDF scores.
     """
@@ -35,5 +36,5 @@ def hybrid_search(query, sample_papers, bm25_model, vectorizer, tfidf_matrix, to
     
     top_indices = np.argsort(combined_scores)[::-1][:top_k]
     
-    results = [{'doc': sample_papers[i], 'score': combined_scores[i]} for i in top_indices]
+    results = [{'doc': documents[i], 'score': combined_scores[i]} for i in top_indices]
     return results

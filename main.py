@@ -1,19 +1,36 @@
 # File: main.py
-from tokenize_words import initialize_and_preprocess
+from data_processor import initialize_and_preprocess
 from retriever import hybrid_search
 from llm_interface import configure_llm, get_llm_response
 from rank_bm25 import BM25Okapi
+import os
 
 def main():
-    # 1. Initialize models and data
+    # --- IMPORTANT: Delete the old pickle file if it exists with the wrong structure ---
+    if os.path.exists('rag_data.pkl'):
+        print("Checking data file structure...")
+        import pickle
+        with open('rag_data.pkl', 'rb') as f:
+            data = pickle.load(f)
+            if 'sample_papers' in data:
+                print("Old data structure found. Deleting 'rag_data.pkl' to regenerate.")
+                os.remove('rag_data.pkl')
+
+    # 1. Initialize models and data from PDFs
     processed_data = initialize_and_preprocess()
+
+    # This check makes the code robust to different data versions
+    documents_list = processed_data.get('documents') or processed_data.get('sample_papers')
+    if not documents_list:
+        raise ValueError("Could not find 'documents' or 'sample_papers' key in processed data.")
+
     bm25_model = BM25Okapi(processed_data['tokenized_corpus'])
     llm_model = configure_llm()
     
     print("\nSystem is ready. You can now ask questions.")
 
     while True:
-        query = input("\nAsk a question about AI papers (or type 'exit' to quit): ")
+        query = input("\nAsk a question about your documents (or type 'exit' to quit): ")
         if query.lower() == 'exit':
             break
             
@@ -21,7 +38,7 @@ def main():
         print("\nSearching for relevant documents...")
         relevant_docs = hybrid_search(
             query=query,
-            sample_papers=processed_data['sample_papers'],
+            documents=documents_list,
             bm25_model=bm25_model,
             vectorizer=processed_data['vectorizer'],
             tfidf_matrix=processed_data['tfidf_matrix']
@@ -33,7 +50,8 @@ def main():
 
         print(f"\nFound {len(relevant_docs)} relevant document(s). Retrieving context:")
         for doc in relevant_docs:
-            print(f"  - ID: {doc['doc']['name']}, Score: {doc['score']:.4f}")
+            # Displaying the URL as the ID
+            print(f"  - ID: {doc['doc']['id']}, Score: {doc['score']:.4f}")
 
         # 3. Generate a response
         print("\nGenerating answer with LLM...")
