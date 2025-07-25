@@ -25,7 +25,7 @@ def get_llm_response(client, query, context_docs):
 
     context = "\n\n---\n\n".join(doc['doc']['text'] for doc in context_docs)
     prompt = (
-        "You are a helpful AI assistant answering user questions from research papers.\n"
+        "You are a helpful AI assistant answering user questions from legal documents.\n"
         "Use *only* the provided context. If there's no answer in the context, state that clearly.\n\n"
         f"Context:\n{context}\n\n"
         f"Question: {query}\n\nAnswer:"
