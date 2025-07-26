@@ -21,19 +21,22 @@ class CacheWarmer:
         """Pre-compute responses for common queries"""
         print("Warming cache with common queries...")
         
+        loop = asyncio.get_event_loop()
         with ThreadPoolExecutor(max_workers=3) as executor:
             tasks = []
             for query in self.common_queries:
-                task = executor.submit(self._precompute_query_response, query)
+                task = loop.run_in_executor(executor, self._precompute_query_response, query)
                 tasks.append(task)
                 
-            for task in tasks:
-                try:
-                    result = task.result()
-                    if result:
+            try:
+                results = await asyncio.gather(*tasks, return_exceptions=True)
+                for result in results:
+                    if isinstance(result, Exception):
+                        print(f"Error warming cache: {result}")
+                    elif result:
                         print(f"Pre-computed response for: {result['query'][:50]}...")
-                except Exception as e:
-                    print(f"Error warming cache: {e}")
+            except Exception as e:
+                print(f"Error in cache warming: {e}")
                     
     def _precompute_query_response(self, query):
         """Precompute and cache query responses"""

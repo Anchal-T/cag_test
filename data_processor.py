@@ -8,7 +8,7 @@ import os
 import requests
 import fitz
 from sklearn.feature_extraction.text import TfidfVectorizer
-from config import PERSISTENCE_FILE, PDF_URLS, CHUNK_SIZE, CHUNK_OVERLAP
+from config import PERSISTENCE_FILE, CHUNK_SIZE, CHUNK_OVERLAP
 from tqdm import tqdm
 import re
 
@@ -61,8 +61,53 @@ def make_langchain_compatible(data):
     data['langchain_compatible'] = True
     return data
 
-def initialize_and_preprocess():
-    """Enhanced to support LangChain integration"""
+def process_new_document(document_url):
+    """Process a new document URL for immediate use"""
+    print(f"Processing new document: {document_url}")
+    
+    # Download and extract text
+    text = download_and_extract_text(document_url)
+    if not text:
+        raise ValueError(f"Failed to extract text from document: {document_url}")
+    
+    # Create document structure
+    documents = [{'id': document_url, 'text': text}]
+    
+    # Chunk the document
+    chunks = chunk_text(text)
+    chunked_documents = []
+    for i, chunk_text_content in enumerate(chunks):
+        chunked_documents.append({
+            'chunk_id': i,
+            'source_doc_id': document_url,
+            'text': chunk_text_content
+        })
+    
+    # Process for TF-IDF
+    raw_texts = [doc['text'] for doc in chunked_documents]
+    vectorizer = TfidfVectorizer(stop_words='english', lowercase=True, min_df=1)
+    tfidf_matrix = vectorizer.fit_transform(raw_texts)
+    
+    data_to_return = {
+        "full_documents": documents,
+        "chunked_documents": chunked_documents,
+        "vectorizer": vectorizer,
+        "tfidf_matrix_chunks": tfidf_matrix
+    }
+    
+    # Add LangChain compatibility flag
+    data_to_return = make_langchain_compatible(data_to_return)
+    
+    print(f"Processing complete for new document.")
+    return data_to_return
+
+def initialize_and_preprocess(document_url=None):
+    """Process either a new document or load existing cache"""
+    if document_url:
+        # Process new document dynamically
+        return process_new_document(document_url)
+    
+    # Existing cache loading logic (fallback)
     if os.path.exists(PERSISTENCE_FILE):
         print("Loading pre-processed data from disk...")
         with open(PERSISTENCE_FILE, 'rb') as f:
@@ -76,43 +121,4 @@ def initialize_and_preprocess():
                 pickle.dump(data, f)
         return data
 
-    print("No pre-processed data found. Starting one-time processing from PDF URLs...")
-    documents = []
-    chunked_documents = []
-    chunk_id_counter = 0
-
-    for url in tqdm(PDF_URLS, desc="Downloading & Parsing PDFs"):
-        text = download_and_extract_text(url)
-        if text:
-            documents.append({'id': url, 'text': text})
-            chunks = chunk_text(text)
-            for chunk_text_content in chunks:
-                chunked_documents.append({
-                    'chunk_id': chunk_id_counter,
-                    'source_doc_id': url,
-                    'text': chunk_text_content
-                })
-                chunk_id_counter += 1
-
-    if not documents:
-        raise ValueError("No documents could be processed. Check URLs and network connection.")
-
-    print("Processing chunked documents for TF-IDF (for cache retrieval)...")
-    raw_texts = [doc['text'] for doc in chunked_documents]
-    vectorizer = TfidfVectorizer(stop_words='english', lowercase=True, min_df=1)
-    tfidf_matrix = vectorizer.fit_transform(raw_texts)
-
-    data_to_persist = {
-        "full_documents": documents,
-        "chunked_documents": chunked_documents,
-        "vectorizer": vectorizer,
-        "tfidf_matrix_chunks": tfidf_matrix
-    }
-    # Add LangChain compatibility flag
-    data_to_persist = make_langchain_compatible(data_to_persist)
-
-    print(f"Processing complete. Saving to {PERSISTENCE_FILE}...")
-    with open(PERSISTENCE_FILE, 'wb') as f:
-        pickle.dump(data_to_persist, f)
-
-    return data_to_persist
+    raise ValueError("No document URL provided and no cached data available.")

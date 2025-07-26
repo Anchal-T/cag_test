@@ -6,28 +6,33 @@ from query_processor import QueryProcessor
 from cache_warming import CacheWarmer
 from cache_analytics import CacheAnalytics
 from adaptive_retriever import AdaptiveRetriever
-from data_processor import initialize_and_preprocess
+from data_processor import process_new_document
 import asyncio
 
 class CAGEngine:
-    def __init__(self):
+    def __init__(self, document_url=None):
         print("Initializing CAG Engine...")
         
         # Initialize cache manager
         self.cache_manager = AdvancedCacheManager()
-        self.cache_entries = load_cache()
         
-        if not self.cache_entries:
-            raise FileNotFoundError("Cache not found. Please build cache first.")
-        
-        # Initialize data processing and retrieval
-        self.processed_data = initialize_and_preprocess()
+        # Process document dynamically if URL provided
+        if document_url:
+            print(f"Processing document: {document_url}")
+            self.processed_data = process_new_document(document_url)
+        else:
+            # Load cache if no document URL provided
+            self.cache_entries = load_cache()
+            if not self.cache_entries:
+                raise FileNotFoundError("Cache not found. Please build cache first.")
+            # Initialize data processing and retrieval
+            self.processed_data = None  # Will be set per query
         
         # Initialize hybrid retriever
-        self.retriever = CAGHybridRetriever(self.processed_data)
+        self.retriever = None
         
         # Initialize adaptive retriever
-        self.adaptive_retriever = AdaptiveRetriever(self.retriever)
+        self.adaptive_retriever = None
         
         # Initialize query processor
         self.query_processor = QueryProcessor()
@@ -38,24 +43,33 @@ class CAGEngine:
         # Initialize cache warmer
         self.cache_warmer = CacheWarmer(self.cache_manager, self.retriever)
         
-        # Warm cache on startup
-        self._warm_cache()
-        
         print("CAG Engine initialized successfully!")
     
-    def _warm_cache(self):
-        """Warm cache with common queries"""
-        try:
-            asyncio.run(self.cache_warmer.warm_cache_with_common_queries())
-        except Exception as e:
-            print(f"Cache warming failed: {e}")
+    def _setup_retriever_for_document(self, document_url):
+        """Set up retriever for a specific document"""
+        if not self.processed_data or self.processed_data['full_documents'][0]['id'] != document_url:
+            self.processed_data = process_new_document(document_url)
+        
+        if not self.retriever:
+            self.retriever = CAGHybridRetriever(self.processed_data)
+            self.adaptive_retriever = AdaptiveRetriever(self.retriever)
+        elif self.retriever.chunked_documents[0]['source_doc_id'] != document_url:
+            # Reinitialize retriever for new document
+            self.retriever = CAGHybridRetriever(self.processed_data)
+            self.adaptive_retriever = AdaptiveRetriever(self.retriever)
     
-    def generate_answer(self, query):
+    def generate_answer(self, query, document_url=None):
         """Main method to generate answers using integrated components"""
         import time
         start_time = time.time()
         
         try:
+            # Set up retriever for the document
+            if document_url:
+                self._setup_retriever_for_document(document_url)
+            elif not self.retriever:
+                raise ValueError("No document URL provided and no retriever initialized")
+            
             # Enhance query
             enhanced_terms = self.query_processor.enhance_query(query)
             intent = self.query_processor.detect_query_intent(query)
@@ -75,14 +89,8 @@ class CAGEngine:
                 }
                 relevant_entries.append(entry)
             
-            # Check for precomputed responses first
-            precomputed_key = f"precomputed_{hash(query)}"
-            if hasattr(self.cache_manager, 'memory_cache') and precomputed_key in self.cache_manager.memory_cache:
-                response = self.cache_manager.memory_cache[precomputed_key]['response']
-                print("Using precomputed response")
-            else:
-                # Generate response using LLM
-                response = get_llm_response_with_cache(query, relevant_entries)
+            # Generate response using LLM
+            response = get_llm_response_with_cache(query, relevant_entries)
             
             # Log analytics
             response_time = time.time() - start_time
@@ -105,5 +113,6 @@ class CAGEngine:
     
     def learn_from_feedback(self, query, feedback_score):
         """Learn from user feedback"""
-        relevant_docs = self.retriever.retrieve(query, top_k=5)
-        self.adaptive_retriever.learn_from_feedback(query, relevant_docs, feedback_score)
+        if self.retriever:
+            relevant_docs = self.retriever.retrieve(query, top_k=5)
+            self.adaptive_retriever.learn_from_feedback(query, relevant_docs, feedback_score)
