@@ -1,4 +1,3 @@
-# File: data_processor.py
 import nltk
 from nltk.corpus import stopwords
 from nltk.tokenize import word_tokenize
@@ -7,7 +6,7 @@ import string
 import pickle
 import os
 import requests
-import fitz  # PyMuPDF
+import fitz
 from sklearn.feature_extraction.text import TfidfVectorizer
 from config import PERSISTENCE_FILE, PDF_URLS, CHUNK_SIZE, CHUNK_OVERLAP
 from tqdm import tqdm
@@ -20,7 +19,6 @@ nltk.download('wordnet', quiet=True)
 
 def preprocess(text):
     """Cleans, tokenizes, removes stop words, and lemmatizes text."""
-    # Basic cleaning: remove extra whitespace and newlines
     text = re.sub(r'\s+', ' ', text).strip()
     stop_words = set(stopwords.words('english'))
     punct = set(string.punctuation)
@@ -53,19 +51,29 @@ def chunk_text(text, chunk_size=CHUNK_SIZE, overlap=CHUNK_OVERLAP):
     chunks = []
     for i in range(0, len(words), chunk_size - overlap):
         chunk = ' '.join(words[i:i + chunk_size])
-        if chunk.strip(): # Avoid empty chunks
+        if chunk.strip():
             chunks.append(chunk)
     return chunks
 
+def make_langchain_compatible(data):
+    """Convert existing data format to work with LangChain"""
+    # Add any necessary format conversions here
+    data['langchain_compatible'] = True
+    return data
+
 def initialize_and_preprocess():
-    """
-    Loads data from persistence file if it exists.
-    Otherwise, downloads, processes PDFs, chunks them, then saves them.
-    """
+    """Enhanced to support LangChain integration"""
     if os.path.exists(PERSISTENCE_FILE):
         print("Loading pre-processed data from disk...")
         with open(PERSISTENCE_FILE, 'rb') as f:
             data = pickle.load(f)
+        # Ensure backwards compatibility
+        if 'langchain_compatible' not in data:
+            print("Updating data format for LangChain compatibility...")
+            data = make_langchain_compatible(data)
+            # Optionally, save the updated format back to disk
+            with open(PERSISTENCE_FILE, 'wb') as f:
+                pickle.dump(data, f)
         return data
 
     print("No pre-processed data found. Starting one-time processing from PDF URLs...")
@@ -76,10 +84,7 @@ def initialize_and_preprocess():
     for url in tqdm(PDF_URLS, desc="Downloading & Parsing PDFs"):
         text = download_and_extract_text(url)
         if text:
-            # Store original full document
             documents.append({'id': url, 'text': text})
-
-            # Chunk the document for caching
             chunks = chunk_text(text)
             for chunk_text_content in chunks:
                 chunked_documents.append({
@@ -93,16 +98,18 @@ def initialize_and_preprocess():
         raise ValueError("No documents could be processed. Check URLs and network connection.")
 
     print("Processing chunked documents for TF-IDF (for cache retrieval)...")
-    raw_texts = [doc['text'] for doc in chunked_documents] # Use chunks for TF-IDF
-    vectorizer = TfidfVectorizer(stop_words='english', lowercase=True, min_df=1) # min_df=1 for small corpus
+    raw_texts = [doc['text'] for doc in chunked_documents]
+    vectorizer = TfidfVectorizer(stop_words='english', lowercase=True, min_df=1)
     tfidf_matrix = vectorizer.fit_transform(raw_texts)
 
     data_to_persist = {
-        "full_documents": documents, # Keep full docs for context if needed
-        "chunked_documents": chunked_documents, # Chunks used for caching
+        "full_documents": documents,
+        "chunked_documents": chunked_documents,
         "vectorizer": vectorizer,
-        "tfidf_matrix_chunks": tfidf_matrix # TF-IDF for chunks
+        "tfidf_matrix_chunks": tfidf_matrix
     }
+    # Add LangChain compatibility flag
+    data_to_persist = make_langchain_compatible(data_to_persist)
 
     print(f"Processing complete. Saving to {PERSISTENCE_FILE}...")
     with open(PERSISTENCE_FILE, 'wb') as f:

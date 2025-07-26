@@ -40,3 +40,8 @@ RETRIEVAL_METHOD = "tfidf" # Placeholder for future expansion
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
 if not GEMINI_API_KEY:
     raise ValueError("GEMINI_API_KEY not found in environment variables (.env file).")
+
+USE_LANGCHAIN_HYBRID = True
+BM25_WEIGHT = 0.7
+TFIDF_WEIGHT = 0.3
+HYBRID_TOP_K = 5

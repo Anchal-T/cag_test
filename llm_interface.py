@@ -54,7 +54,7 @@ Answer:
             model=LLM_MODEL_NAME,
             contents=prompt,
             config=GenerateContentConfig(
-                thinking_config=ThinkingConfig(thinking_budget=100)  # tuning budget as desired
+                thinking_config=ThinkingConfig(thinking_budget=0)  # tuning budget as desired
             )
         )
 
