@@ -66,7 +66,7 @@ class CAGHybridRetriever:
         # Ensemble retriever
         self.ensemble_retriever = EnsembleRetriever(
             retrievers=[self.bm25_retriever, self.tfidf_retriever],
-            weights=[0.7, 0.3]
+            weights=[0.6, 0.4]
         )
     
     def retrieve(self, query, top_k=5):
