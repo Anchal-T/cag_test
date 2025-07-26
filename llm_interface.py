@@ -1,42 +1,43 @@
-import os
-from dotenv import load_dotenv
 from google import genai
 from google.genai.types import GenerateContentConfig, ThinkingConfig
 
-def configure_llm():
-    """Initializes the Gemini client."""
-    load_dotenv()
-    api_key = os.getenv("GEMINI_API_KEY") or os.getenv("GOOGLE_API_KEY")
-    if not api_key:
-        print("Error: GEMINI_API_KEY or GOOGLE_API_KEY not set")
-        return None
+from config import LLM_MODEL_NAME, GEMINI_API_KEY
 
-    try:
-        client = genai.Client(api_key=api_key)
-        return client
-    except Exception as e:
-        print(f"Error initializing Gemini client: {e}")
-        return None
+client = genai.Client(api_key=GEMINI_API_KEY)
+def get_llm_response_with_cache(query, relevant_cache_entries, context_docs_snippets=None):
+    if not relevant_cache_entries:
+        return "No relevant knowledge found for the query."
 
-def get_llm_response(client, query, context_docs):
-    """Generates a response based on context documents."""
-    if not client:
-        return "LLM service is not available."
-
-    context = "\n\n---\n\n".join(doc['doc']['content'] for doc in context_docs)
-    prompt = (
-        "You are a helpful AI assistant answering user questions from research papers.\n"
-        "Use *only* the provided context. If there's no answer in the context, state that clearly.\n\n"
-        f"Context:\n{context}\n\n"
-        f"Question: {query}\n\nAnswer:"
+    cached_knowledge_text = "\n---\n".join(
+        entry.get("text_snippet", "N/A") for entry in relevant_cache_entries
     )
 
+    context_text = ""
+    if context_docs_snippets:
+        context_text = "\n---\n".join(context_docs_snippets)
+
+    prompt = f"""
+You are a helpful AI assistant that answers questions based on provided knowledge.
+Pre‑loaded knowledge:
+{cached_knowledge_text}
+
+Additional context (for reference):
+{context_text}
+
+Question: {query}
+Answer:
+"""
+
     try:
-        resp = client.models.generate_content(
-            model="gemini-2.5-flash",
+        response = client.models.generate_content(
+            model=LLM_MODEL_NAME,
             contents=prompt,
-            config=GenerateContentConfig(thinking_config=ThinkingConfig(thinking_budget=0))
+            config=GenerateContentConfig(
+                thinking_config=ThinkingConfig(thinking_budget=0)  # tuning budget as desired
+            )
         )
-        return resp.text
+
+        return response.text.strip()
+
     except Exception as e:
-        return f"Error from Gemini API: {e}"
+        return f"Error during generation: {e}"

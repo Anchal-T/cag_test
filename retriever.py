@@ -1,39 +1,75 @@
-import numpy as np
+from langchain_community.retrievers import BM25Retriever
+from langchain.retrievers import EnsembleRetriever
+from langchain_core.documents import Document
+from langchain_core.retrievers import BaseRetriever
+from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.metrics.pairwise import cosine_similarity
-from tokenize_words import preprocess
+import numpy as np
+from data_processor import preprocess
+from typing import List
 
-def search_tfidf(query, vectorizer, tfidf_matrix):
-    """Performs TF-IDF search using a pre-fitted vectorizer and matrix."""
-    query_vec = vectorizer.transform([query])
-    scores = cosine_similarity(query_vec, tfidf_matrix).flatten()
-    return scores
+class TFIDFRetriever(BaseRetriever):
+    """Custom retriever that integrates with your existing TF-IDF setup"""
+    
+    def __init__(self, vectorizer, tfidf_matrix, documents, k=10):
+        super().__init__()
+        # Store as private attributes to avoid field validation issues
+        self._vectorizer = vectorizer
+        self._tfidf_matrix = tfidf_matrix
+        self._documents = documents
+        self._k = k
+    
+    def _get_relevant_documents(self, query: str) -> List[Document]:
+        """Get documents relevant to a query."""
+        query_vec = self._vectorizer.transform([query])
+        scores = cosine_similarity(query_vec, self._tfidf_matrix).flatten()
+        top_indices = np.argsort(scores)[::-1][:self._k]
+        return [self._documents[i] for i in top_indices if scores[i] > 0]
 
-def search_bm25(query, bm25_model):
-    """Performs BM25 search using a pre-built model."""
-    tokenized_query = preprocess(query)
-    scores = bm25_model.get_scores(tokenized_query)
-    return scores
-
-def hybrid_search(query, sample_papers, bm25_model, vectorizer, tfidf_matrix, top_k=2, bm25_weight=0.6, tfidf_weight=0.4):
-    """
-    Performs a hybrid search by combining normalized BM25 and TF-IDF scores.
-    """
-    tfidf_scores = search_tfidf(query, vectorizer, tfidf_matrix)
-    bm25_scores = search_bm25(query, bm25_model)
-
-    if np.std(tfidf_scores) > 0:
-        norm_tfidf = (tfidf_scores - np.min(tfidf_scores)) / (np.max(tfidf_scores) - np.min(tfidf_scores))
-    else:
-        norm_tfidf = np.zeros_like(tfidf_scores)
+class CAGHybridRetriever:
+    def __init__(self, processed_data):
+        """Initialize with your existing processed data structure"""
+        self.chunked_documents = processed_data['chunked_documents']
+        self.vectorizer = processed_data['vectorizer']
+        self.tfidf_matrix = processed_data['tfidf_matrix_chunks']
         
-    if np.std(bm25_scores) > 0:
-        norm_bm25 = (bm25_scores - np.min(bm25_scores)) / (np.max(bm25_scores) - np.min(bm25_scores))
-    else:
-        norm_bm25 = np.zeros_like(bm25_scores)
+        # Convert to LangChain documents
+        self.langchain_docs = [
+            Document(
+                page_content=doc['text'],
+                metadata={
+                    'chunk_id': doc['chunk_id'],
+                    'source_doc_id': doc['source_doc_id']
+                }
+            ) for doc in self.chunked_documents
+        ]
+        
+        # Initialize retrievers
+        self._setup_retrievers()
     
-    combined_scores = (bm25_weight * norm_bm25) + (tfidf_weight * norm_tfidf)
+    def _setup_retrievers(self):
+        """Setup BM25 and TF-IDF retrievers"""
+        # BM25 retriever using LangChain
+        self.bm25_retriever = BM25Retriever.from_documents(
+            self.langchain_docs,
+            k=10,
+            preprocess_func=preprocess
+        )
+        
+        # Custom TF-IDF retriever that uses your existing vectorizer
+        self.tfidf_retriever = TFIDFRetriever(
+            self.vectorizer, 
+            self.tfidf_matrix, 
+            self.langchain_docs
+        )
+        
+        # Ensemble retriever
+        self.ensemble_retriever = EnsembleRetriever(
+            retrievers=[self.bm25_retriever, self.tfidf_retriever],
+            weights=[0.6, 0.4]
+        )
     
-    top_indices = np.argsort(combined_scores)[::-1][:top_k]
-    
-    results = [{'doc': sample_papers[i], 'score': combined_scores[i]} for i in top_indices]
-    return results
+    def retrieve(self, query, top_k=5):
+        """Main retrieval method"""
+        results = self.ensemble_retriever.invoke(query)
+        return results[:top_k]

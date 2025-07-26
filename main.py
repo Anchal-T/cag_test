@@ -1,47 +1,55 @@
 # File: main.py
-from tokenize_words import initialize_and_preprocess
-from retriever import hybrid_search
-from llm_interface import configure_llm, get_llm_response
-from rank_bm25 import BM25Okapi
+"""
+Main entry point for the CAG application.
+"""
+import os
+from cag_engine import CAGEngine
+from cache_builder import build_cache, CACHE_FILE # Import build function
 
 def main():
-    # 1. Initialize models and data
-    processed_data = initialize_and_preprocess()
-    bm25_model = BM25Okapi(processed_data['tokenized_corpus'])
-    llm_model = configure_llm()
-    
-    print("\nSystem is ready. You can now ask questions.")
+    print("--- Cache-Augmented Generation (CAG) System ---")
 
+    # --- Check if cache exists, build if not ---
+    if not os.path.exists(CACHE_FILE):
+        print(f"Cache file '{CACHE_FILE}' not found.")
+        build_choice = input("Do you want to build the cache now? (y/n): ").lower()
+        if build_choice == 'y':
+            build_cache()
+        else:
+            print("Cannot run CAG system without cache. Exiting.")
+            return
+
+    # --- Initialize the CAG Engine ---
+    try:
+        cag_engine = CAGEngine()
+    except FileNotFoundError as e:
+        print(f"Error initializing CAG Engine: {e}")
+        print("Please ensure the cache is built correctly.")
+        return
+    except Exception as e:
+        print(f"Unexpected error initializing CAG Engine: {e}")
+        return
+
+    print("\nCAG System is ready. You can now ask questions.")
+    print("(Type 'exit' to quit)")
     while True:
-        query = input("\nAsk a question about AI papers (or type 'exit' to quit): ")
+        query = input("\nAsk a question based on the pre-loaded knowledge: ")
         if query.lower() == 'exit':
+            print("Goodbye!")
             break
-            
-        # 2. Retrieve relevant documents
-        print("\nSearching for relevant documents...")
-        relevant_docs = hybrid_search(
-            query=query,
-            sample_papers=processed_data['sample_papers'],
-            bm25_model=bm25_model,
-            vectorizer=processed_data['vectorizer'],
-            tfidf_matrix=processed_data['tfidf_matrix']
-        )
-        
-        if not relevant_docs:
-            print("Could not find any relevant documents.")
+
+        if not query.strip():
+            print("Please enter a valid question.")
             continue
 
-        print(f"\nFound {len(relevant_docs)} relevant document(s). Retrieving context:")
-        for doc in relevant_docs:
-            print(f"  - ID: {doc['doc']['name']}, Score: {doc['score']:.4f}")
+        # --- Generate Answer using CAG Engine ---
+        print("\nProcessing query...")
+        answer = cag_engine.generate_answer(query)
 
-        # 3. Generate a response
-        print("\nGenerating answer with LLM...")
-        answer = get_llm_response(llm_model, query, relevant_docs)
-        
-        print("\n--- AI Assistant ---")
+        # --- Display Answer ---
+        print("\n--- AI Assistant (CAG) ---")
         print(answer)
-        print("--------------------\n")
+        print("-" * 20)
 
 if __name__ == "__main__":
     main()

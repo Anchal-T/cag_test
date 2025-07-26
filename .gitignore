@@ -3,3 +3,5 @@ arxiv_papers.json
 rag_data.pkl
 .env
 __pycache__
+processed_data.pkl
+cag_cache.pkl
