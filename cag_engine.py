@@ -3,7 +3,6 @@ from cache_builder import load_cache, AdvancedCacheManager
 from retriever import CAGHybridRetriever
 from llm_interface import get_llm_response_with_cache
 from query_processor import QueryProcessor
-from cache_warming import CacheWarmer
 from cache_analytics import CacheAnalytics
 from adaptive_retriever import AdaptiveRetriever
 from data_processor import process_new_document
@@ -39,9 +38,6 @@ class CAGEngine:
         
         # Initialize cache analytics
         self.cache_analytics = CacheAnalytics(self.cache_manager)
-        
-        # Initialize cache warmer
-        self.cache_warmer = CacheWarmer(self.cache_manager, self.retriever)
         
         print("CAG Engine initialized successfully!")
     
