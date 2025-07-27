@@ -33,6 +33,11 @@ class CAGHybridRetriever:
         self.vectorizer = processed_data['vectorizer']
         self.tfidf_matrix = processed_data['tfidf_matrix_chunks']
         
+        # Initialize retrievers as class attributes
+        self.bm25_retriever = None
+        self.tfidf_retriever = None
+        self.ensemble_retriever = None
+        
         # Convert to LangChain documents
         self.langchain_docs = [
             Document(

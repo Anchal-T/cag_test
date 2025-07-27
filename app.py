@@ -2,40 +2,16 @@ from flask import Flask, request, jsonify
 from cag_engine import CAGEngine
 from cache_builder import build_cache, CACHE_FILE
 import os
-import logging
-
-# Configure logging
-logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger(__name__)
-
-# Initialize Flask app
 app = Flask(__name__)
 
-# Global CAG engine instance
 cag_engine = None
 
 def initialize_cag_engine():
-    """Initialize the CAG engine"""
     global cag_engine
-    
-    # Initialize the integrated CAG Engine without a specific document
-    try:
-        cag_engine = CAGEngine()
-        logger.info("CAG Engine initialized successfully")
-    except Exception as e:
-        logger.error(f"Error initializing CAG Engine: {e}")
-        raise
+    cag_engine = CAGEngine()
 
 @app.route('/hackrx/run', methods=['POST'])
 def get_answers():
-    """
-    API endpoint to get answers for questions based on document URL
-    Expected JSON input: 
-    {
-        "documents": "document_url", 
-        "questions": ["question1", "question2", ...]
-    }
-    """
     global cag_engine
     
     try:
@@ -75,7 +51,6 @@ def get_answers():
         }), 200
         
     except Exception as e:
-        logger.error(f"Error processing request: {e}")
         return jsonify({"error": f"Error processing request: {str(e)}"}), 500
 
 @app.route('/health', methods=['GET'])
@@ -89,4 +64,4 @@ if __name__ == '__main__':
         initialize_cag_engine()
         app.run(host='0.0.0.0', port=5000, debug=False)
     except Exception as e:
-        logger.error(f"Failed to start server: {e}")
+        print(f"Failed to start server: {e}")
