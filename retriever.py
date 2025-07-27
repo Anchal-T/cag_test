@@ -2,40 +2,33 @@ from langchain_community.retrievers import BM25Retriever
 from langchain.retrievers import EnsembleRetriever
 from langchain_core.documents import Document
 from langchain_core.retrievers import BaseRetriever
-from sklearn.feature_extraction.text import TfidfVectorizer
-from sklearn.metrics.pairwise import cosine_similarity
-import numpy as np
-from data_processor import preprocess
 from typing import List, Optional
+from data_processor import preprocess
+from langchain_community.vectorstores import Annoy
+from langchain_huggingface import HuggingFaceEmbeddings
+from config import EMBEDDING_MODEL_NAME
 
-class TFIDFRetriever(BaseRetriever):
-    """Custom retriever that integrates with your existing TF-IDF setup"""
-    
-    def __init__(self, vectorizer, tfidf_matrix, documents, k=10):
-        super().__init__()
-        # Store as private attributes to avoid field validation issues
-        self._vectorizer = vectorizer
-        self._tfidf_matrix = tfidf_matrix
-        self._documents = documents
-        self._k = k
-    
+class AnnoyRetriever(BaseRetriever):
+    """
+    Custom retriever that uses a pre-built Annoy index.
+    The 'index' and 'k' fields are declared at the class level to comply with
+    LangChain's Pydantic-based BaseRetriever.
+    """
+    index: Annoy
+    k: int = 10
+
     def _get_relevant_documents(self, query: str) -> List[Document]:
-        """Get documents relevant to a query."""
-        query_vec = self._vectorizer.transform([query])
-        scores = cosine_similarity(query_vec, self._tfidf_matrix).flatten()
-        top_indices = np.argsort(scores)[::-1][:self._k]
-        return [self._documents[i] for i in top_indices if scores[i] > 0]
+        """Get documents relevant to a query using the Annoy index."""
+        return self.index.similarity_search(query, k=self.k)
 
 class CAGHybridRetriever:
     def __init__(self, processed_data):
         """Initialize with your existing processed data structure"""
         self.chunked_documents = processed_data['chunked_documents']
-        self.vectorizer = processed_data['vectorizer']
-        self.tfidf_matrix = processed_data['tfidf_matrix_chunks']
         
         # Initialize retrievers as class attributes
         self.bm25_retriever: Optional[BM25Retriever] = None
-        self.tfidf_retriever: Optional[TFIDFRetriever] = None
+        self.annoy_retriever: Optional[AnnoyRetriever] = None
         self.ensemble_retriever: Optional[EnsembleRetriever] = None
         
         # Convert to LangChain documents
@@ -50,10 +43,10 @@ class CAGHybridRetriever:
         ]
         
         # Initialize retrievers
-        self._setup_retrievers()
+        self._setup_retrievers(processed_data['annoy_index_file'])
     
-    def _setup_retrievers(self):
-        """Setup BM25 and TF-IDF retrievers"""
+    def _setup_retrievers(self, annoy_index_file):
+        """Setup BM25 and Annoy retrievers"""
         # BM25 retriever using LangChain
         self.bm25_retriever = BM25Retriever.from_documents(
             self.langchain_docs,
@@ -61,17 +54,17 @@ class CAGHybridRetriever:
             preprocess_func=preprocess
         )
         
-        # Custom TF-IDF retriever that uses your existing vectorizer
-        self.tfidf_retriever = TFIDFRetriever(
-            self.vectorizer, 
-            self.tfidf_matrix, 
-            self.langchain_docs
-        )
+        # Annoy retriever
+        embeddings = HuggingFaceEmbeddings(model_name=EMBEDDING_MODEL_NAME)
+        # Load the local Annoy index
+        annoy_index = Annoy.load_local(annoy_index_file, embeddings, allow_dangerous_deserialization=True)
+        # Instantiate our custom retriever, passing the loaded index as a keyword argument
+        self.annoy_retriever = AnnoyRetriever(index=annoy_index)
         
         # Ensemble retriever
         self.ensemble_retriever = EnsembleRetriever(
-            retrievers=[self.bm25_retriever, self.tfidf_retriever],
-            weights=[0.6, 0.4]
+            retrievers=[self.bm25_retriever, self.annoy_retriever],
+            weights=[0.5, 0.5] # Adjusted weights for a more balanced retrieval
         )
     
     def retrieve(self, query, top_k=5):

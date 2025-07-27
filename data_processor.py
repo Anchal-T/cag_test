@@ -8,10 +8,12 @@ import os
 import requests
 import fitz
 from sklearn.feature_extraction.text import TfidfVectorizer
-from config import PERSISTENCE_FILE, CHUNK_SIZE, CHUNK_OVERLAP, DOCUMENT_CACHE_FILE
+from config import PERSISTENCE_FILE, CHUNK_SIZE, CHUNK_OVERLAP, DOCUMENT_CACHE_FILE, EMBEDDING_MODEL_NAME, ANNOY_INDEX_FILE
 from tqdm import tqdm
 import re
 from datetime import datetime, timedelta
+from langchain_community.vectorstores import Annoy
+from langchain_huggingface import HuggingFaceEmbeddings
 
 # --- Download NLTK data (only need to do this once) ---
 nltk.download('punkt', quiet=True)
@@ -166,11 +168,18 @@ def process_new_document(document_url):
     vectorizer = TfidfVectorizer(stop_words='english', lowercase=True, min_df=1)
     tfidf_matrix = vectorizer.fit_transform(raw_texts)
     
+    # Create Annoy index
+    embeddings = HuggingFaceEmbeddings(model_name=EMBEDDING_MODEL_NAME)
+    annoy_vector_store = Annoy.from_texts(raw_texts, embeddings)
+    annoy_vector_store.save_local(ANNOY_INDEX_FILE)
+
+
     data_to_return = {
         "full_documents": documents,
         "chunked_documents": chunked_documents,
         "vectorizer": vectorizer,
-        "tfidf_matrix_chunks": tfidf_matrix
+        "tfidf_matrix_chunks": tfidf_matrix,
+        "annoy_index_file": ANNOY_INDEX_FILE
     }
     
     # Add LangChain compatibility flag

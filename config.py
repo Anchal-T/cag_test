@@ -12,6 +12,7 @@ load_dotenv()
 PERSISTENCE_FILE = "processed_data.pkl" # Stores processed text, vectorizers, etc.
 CACHE_FILE = "cag_cache.pkl"           # Stores the pre-computed KV caches (conceptual for HF)
 DOCUMENT_CACHE_FILE = "document_cache.pkl"  # Stores downloaded and processed documents
+ANNOY_INDEX_FILE = "annoy.index"
 
 # --- Add the URLs to your documents here ---
 PDF_URLS = [
@@ -20,6 +21,7 @@ PDF_URLS = [
 
 # --- Model Configuration ---
 LLM_MODEL_NAME = "gemini-2.5-flash"
+EMBEDDING_MODEL_NAME = "sentence-transformers/all-MiniLM-L6-v2"
 
 # --- CAG Specific ---
 CHUNK_SIZE = 512
