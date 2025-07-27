@@ -1,7 +1,3 @@
-# File: main.py
-"""
-Main entry point for the CAG application.
-"""
 import os
 from cag_engine import CAGEngine
 from cache_builder import build_cache, CACHE_FILE

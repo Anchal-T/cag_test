@@ -11,14 +11,10 @@ load_dotenv()
 # --- Data & Cache ---
 PERSISTENCE_FILE = "processed_data.pkl" # Stores processed text, vectorizers, etc.
 CACHE_FILE = "cag_cache.pkl"           # Stores the pre-computed KV caches (conceptual for HF)
+DOCUMENT_CACHE_FILE = "document_cache.pkl"  # Stores downloaded and processed documents
 
 # --- Add the URLs to your documents here ---
 PDF_URLS = [
-    "https://hackrx.in/policies/BAJHLIP23020V012223.pdf",
-    "https://hackrx.in/policies/HDFHLIP23024V072223.pdf",
-    "https://hackrx.in/policies/ICIHLIP22012V012223.pdf",
-    "https://hackrx.in/policies/STARHLIP23020V012223.pdf",
-    "https://hackrx.in/policies/ADITYBIRLAHLACT23003V022223.pdf",
     # Add more PDF URLs as needed
 ]
 
