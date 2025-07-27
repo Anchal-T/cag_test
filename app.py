@@ -1,15 +1,28 @@
-from sympy.utilities.decorator import threaded
 from flask import Flask, request, jsonify
 from cag_engine import CAGEngine
 import asyncio
+import functools
 
 app = Flask(__name__)
 
-# Instantiate the engine when the app starts.
+# Instantiate the engine when the app starts
 cag_engine = CAGEngine()
 
+def async_route(f):
+    """Decorator to handle async functions in Flask routes"""
+    @functools.wraps(f)
+    def wrapper(*args, **kwargs):
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+        try:
+            return loop.run_until_complete(f(*args, **kwargs))
+        finally:
+            loop.close()
+    return wrapper
+
 @app.route('/hackrx/run', methods=['POST'])
-async def get_answers():  # Make the endpoint function async
+@async_route
+async def get_answers():
     """
     API endpoint to process questions against a given document URL.
     Handles requests asynchronously for improved performance.
@@ -18,19 +31,19 @@ async def get_answers():  # Make the endpoint function async
         data = request.get_json()
         if not data:
             return jsonify({"error": "No JSON data provided"}), 400
-
+        
         document_url = data.get('documents')
         questions = data.get('questions')
-
+        
         if not document_url:
             return jsonify({"error": "Document URL ('documents') is required"}), 400
-
+        
         if not questions or not isinstance(questions, list):
             return jsonify({"error": "A list of questions ('questions') is required"}), 400
-
+        
         # Await the asynchronous batch generation function
         answers_list = await cag_engine.generate_batch_answers(questions, document_url)
-
+        
         # Format the response
         answers = []
         for i, question in enumerate(questions):
@@ -38,12 +51,12 @@ async def get_answers():  # Make the endpoint function async
                 "question": question,
                 "answer": answers_list[i] if i < len(answers_list) else "Error: No response generated"
             })
-
+        
         return jsonify({
             "document_url": document_url,
             "answers": answers
         }), 200
-
+        
     except Exception as e:
         print(f"Unhandled error in /hackrx/run: {e}")
         return jsonify({"error": f"Error processing request: {str(e)}"}), 500
@@ -53,5 +66,9 @@ def health_check():
     """Health check endpoint to confirm the server is running."""
     return jsonify({"status": "healthy"}), 200
 
-if __name__ == '__main__':
+# Remove the run() function or rename it to avoid conflicts
+def start_app():
     app.run(host='127.0.0.1', port=5000, debug=False, threaded=True)
+
+if __name__ == '__main__':
+    start_app()
