@@ -9,7 +9,6 @@ from typing import Optional
 
 class CAGEngine:
     def __init__(self, document_url=None):
-        print("Initializing CAG Engine...")
         
         # Initialize cache manager
         self.cache_manager = AdvancedCacheManager()
@@ -23,7 +22,6 @@ class CAGEngine:
             self.cache_entries = load_cache()
             if not self.cache_entries:
                 raise FileNotFoundError("Cache not found. Please build cache first.")
-            # Initialize data processing and retrieval
             self.processed_data = None  # Will be set per query
         
         # Initialize hybrid retriever with proper type annotation
@@ -44,10 +42,6 @@ class CAGEngine:
             self.retriever = CAGHybridRetriever(self.processed_data)
     
     def generate_answer(self, query, document_url=None):
-        """Main method to generate answers using integrated components"""
-        import time
-        start_time = time.time()
-        
         try:
             # Set up retriever for the document
             if document_url:
@@ -55,13 +49,10 @@ class CAGEngine:
             elif not self.retriever:
                 raise ValueError("No document URL provided and no retriever initialized")
             
-            # Enhance query
-            enhanced_terms = self.query_processor.enhance_query(query)
-            intent = self.query_processor.detect_query_intent(query)
             # Retrieve relevant documents using the retriever
             if self.retriever is None:
                 raise ValueError("Retriever is not initialized. Please provide a valid document_url or initialize the retriever.")
-            relevant_docs = self.retriever.retrieve(query)
+            
             relevant_docs = self.retriever.retrieve(query)
                     
             # Convert to cache entry format
@@ -76,20 +67,13 @@ class CAGEngine:
             
             # Generate response using LLM
             response = get_llm_response_with_cache(query, relevant_entries)
-            
-            # Log analytics
-            response_time = time.time() - start_time
-            hit_type = 'hit' if relevant_entries else 'miss'
-            
+    
             return response
             
         except Exception as e:
             return f"Error generating response: {e}"
     
     def generate_batch_answers(self, queries, document_url=None):
-        """Generate answers for multiple queries using batch processing"""
-        import time
-        start_time = time.time()
         responses = []
         
         try:
@@ -99,23 +83,17 @@ class CAGEngine:
             elif not self.retriever:
                 raise ValueError("No document URL provided and no retriever initialized")
             
-            # Ensure retrievers are initialized
             
             # Process each query
             for i, query in enumerate(queries):
-                query_start_time = time.time()
-                print(f"Processing query {i+1}/{len(queries)}: {query}")
                 
                 try:
-                    # Enhance query
-                    enhanced_terms = self.query_processor.enhance_query(query)
-                    intent = self.query_processor.detect_query_intent(query)
-                    
                     # Retrieve relevant documents using the retriever
                     relevant_docs = self.retriever.retrieve(query)
                     
                     # Convert to cache entry format
                     relevant_entries = []
+                    
                     for doc in relevant_docs:
                         entry = {
                             'text_snippet': doc.page_content,
@@ -127,17 +105,9 @@ class CAGEngine:
                     # Generate response using LLM
                     response = get_llm_response_with_cache(query, relevant_entries)
                     responses.append(response)
-                    
-                    # Log analytics
-                    response_time = time.time() - query_start_time
-                    hit_type = 'hit' if relevant_entries else 'miss'
-                                    
+                                                        
                 except Exception as e:
                     responses.append(f"Error processing query '{query}': {e}")
-            
-            total_time = time.time() - start_time
-            print(f"Batch processing completed in {total_time:.2f} seconds")
-            return responses
             
         except Exception as e:
             return [f"Error in batch processing: {e}"] * len(queries)

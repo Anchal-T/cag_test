@@ -25,9 +25,6 @@ LLM_MODEL_NAME = "gemini-2.5-flash"
 CHUNK_SIZE = 512
 CHUNK_OVERLAP = 100
 
-# --- Optional: Cache Retrieval Strategy ---
-RETRIEVAL_METHOD = "tfidf"
-
 # --- Gemini API Key (Loaded from .env) ---
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
 if not GEMINI_API_KEY:
