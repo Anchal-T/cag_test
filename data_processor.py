@@ -8,14 +8,86 @@ import os
 import requests
 import fitz
 from sklearn.feature_extraction.text import TfidfVectorizer
-from config import PERSISTENCE_FILE, CHUNK_SIZE, CHUNK_OVERLAP
+from config import PERSISTENCE_FILE, CHUNK_SIZE, CHUNK_OVERLAP, DOCUMENT_CACHE_FILE
 from tqdm import tqdm
 import re
+from datetime import datetime, timedelta
 
 # --- Download NLTK data (only need to do this once) ---
 nltk.download('punkt', quiet=True)
 nltk.download('stopwords', quiet=True)
 nltk.download('wordnet', quiet=True)
+
+# Document cache with expiration (7 days)
+DOCUMENT_CACHE_EXPIRY = timedelta(days=7)
+
+def load_document_cache():
+    """Load document cache from disk"""
+    if os.path.exists(DOCUMENT_CACHE_FILE):
+        try:
+            with open(DOCUMENT_CACHE_FILE, 'rb') as f:
+                cache = pickle.load(f)
+                # Check if cache format is current
+                if isinstance(cache, dict) and 'documents' in cache and isinstance(cache['documents'], dict):
+                    return cache
+                else:
+                    # Old format or corrupted, create new cache
+                    return {'documents': {}, 'last_updated': datetime.now()}
+        except (pickle.PickleError, EOFError, Exception):
+            # Corrupted cache, create new one
+            return {'documents': {}, 'last_updated': datetime.now()}
+    return {'documents': {}, 'last_updated': datetime.now()}
+
+def save_document_cache(cache):
+    """Save document cache to disk"""
+    try:
+        with open(DOCUMENT_CACHE_FILE, 'wb') as f:
+            pickle.dump(cache, f)
+    except Exception as e:
+        print(f"Warning: Could not save document cache: {e}")
+
+def is_cache_valid(timestamp):
+    """Check if cache entry is still valid"""
+    if isinstance(timestamp, datetime):
+        return datetime.now() - timestamp < DOCUMENT_CACHE_EXPIRY
+    return False
+
+def get_cached_document(url):
+    """Retrieve document from cache if available and valid"""
+    cache = load_document_cache()
+    # Ensure cache has the correct structure
+    if not isinstance(cache, dict) or 'documents' not in cache or not isinstance(cache['documents'], dict):
+        return None
+        
+    documents = cache['documents']
+    if url in documents:
+        doc_entry = documents[url]
+        if isinstance(doc_entry, dict) and 'timestamp' in doc_entry and 'data' in doc_entry:
+            if is_cache_valid(doc_entry['timestamp']):
+                print(f"Using cached document for {url}")
+                return doc_entry['data']
+            else:
+                # Remove expired entry
+                del documents[url]
+                cache['last_updated'] = datetime.now()
+                save_document_cache(cache)
+    return None
+
+def cache_document(url, data):
+    """Cache processed document"""
+    cache = load_document_cache()
+    # Ensure cache has the correct structure
+    if not isinstance(cache, dict):
+        cache = {'documents': {}, 'last_updated': datetime.now()}
+    if 'documents' not in cache or not isinstance(cache['documents'], dict):
+        cache['documents'] = {}
+        
+    cache['documents'][url] = {
+        'data': data,
+        'timestamp': datetime.now()
+    }
+    cache['last_updated'] = datetime.now()
+    save_document_cache(cache)
 
 def preprocess(text):
     """Cleans, tokenizes, removes stop words, and lemmatizes text."""
@@ -65,6 +137,12 @@ def process_new_document(document_url):
     """Process a new document URL for immediate use"""
     print(f"Processing new document: {document_url}")
     
+    # Check cache first
+    cached_data = get_cached_document(document_url)
+    if cached_data:
+        print(f"Loaded processed document from cache: {document_url}")
+        return cached_data
+    
     # Download and extract text
     text = download_and_extract_text(document_url)
     if not text:
@@ -97,6 +175,9 @@ def process_new_document(document_url):
     
     # Add LangChain compatibility flag
     data_to_return = make_langchain_compatible(data_to_return)
+    
+    # Cache the processed document
+    cache_document(document_url, data_to_return)
     
     print(f"Processing complete for new document.")
     return data_to_return

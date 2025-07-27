@@ -54,16 +54,19 @@ def get_answers():
         if not questions or not isinstance(questions, list):
             return jsonify({"error": "Questions array is required"}), 400
         
-        # Process each question using CAG engine with the provided document
+        # Process questions using CAG engine with the provided document
         if cag_engine is None:
             return jsonify({"error": "CAG engine not initialized"}), 500
             
+        # Use batch processing for better performance
+        answers_list = cag_engine.generate_batch_answers(questions, document_url)
+        
+        # Format responses
         answers = []
-        for question in questions:
-            answer = cag_engine.generate_answer(question, document_url)
+        for i, question in enumerate(questions):
             answers.append({
                 "question": question,
-                "answer": answer
+                "answer": answers_list[i] if i < len(answers_list) else "Error: No response generated"
             })
         
         return jsonify({

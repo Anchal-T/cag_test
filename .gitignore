@@ -5,3 +5,4 @@ rag_data.pkl
 __pycache__
 processed_data.pkl
 cag_cache.pkl
+document_cache.pkl
