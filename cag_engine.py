@@ -3,14 +3,12 @@ from cache_builder import load_cache, AdvancedCacheManager
 from retriever import CAGHybridRetriever
 from llm_interface import get_llm_response_with_cache
 from query_processor import QueryProcessor
-from cache_analytics import CacheAnalytics
-from adaptive_retriever import AdaptiveRetriever
 from data_processor import process_new_document
 import asyncio
+from typing import Optional
 
 class CAGEngine:
     def __init__(self, document_url=None):
-        print("Initializing CAG Engine...")
         
         # Initialize cache manager
         self.cache_manager = AdvancedCacheManager()
@@ -24,21 +22,12 @@ class CAGEngine:
             self.cache_entries = load_cache()
             if not self.cache_entries:
                 raise FileNotFoundError("Cache not found. Please build cache first.")
-            # Initialize data processing and retrieval
             self.processed_data = None  # Will be set per query
         
-        # Initialize hybrid retriever
-        self.retriever = None
-        
-        # Initialize adaptive retriever
-        self.adaptive_retriever = None
-        
+        # Initialize hybrid retriever with proper type annotation
+        self.retriever: Optional[CAGHybridRetriever] = None        
         # Initialize query processor
-        self.query_processor = QueryProcessor()
-        
-        # Initialize cache analytics
-        self.cache_analytics = CacheAnalytics(self.cache_manager)
-        
+        self.query_processor = QueryProcessor()        
         print("CAG Engine initialized successfully!")
     
     def _setup_retriever_for_document(self, document_url):
@@ -48,17 +37,11 @@ class CAGEngine:
         
         if not self.retriever:
             self.retriever = CAGHybridRetriever(self.processed_data)
-            self.adaptive_retriever = AdaptiveRetriever(self.retriever)
         elif self.retriever.chunked_documents[0]['source_doc_id'] != document_url:
             # Reinitialize retriever for new document
             self.retriever = CAGHybridRetriever(self.processed_data)
-            self.adaptive_retriever = AdaptiveRetriever(self.retriever)
     
     def generate_answer(self, query, document_url=None):
-        """Main method to generate answers using integrated components"""
-        import time
-        start_time = time.time()
-        
         try:
             # Set up retriever for the document
             if document_url:
@@ -66,19 +49,12 @@ class CAGEngine:
             elif not self.retriever:
                 raise ValueError("No document URL provided and no retriever initialized")
             
-            # Ensure retrievers are initialized
-            if not self.retriever or not self.adaptive_retriever:
-                raise ValueError("Retrievers not properly initialized")
+            # Retrieve relevant documents using the retriever
+            if self.retriever is None:
+                raise ValueError("Retriever is not initialized. Please provide a valid document_url or initialize the retriever.")
             
-            # Enhance query
-            enhanced_terms = self.query_processor.enhance_query(query)
-            intent = self.query_processor.detect_query_intent(query)
-            
-            # Use adaptive retrieval
-            relevant_docs = self.adaptive_retriever.retrieve_with_adaptation(
-                query, top_k=5
-            )
-            
+            relevant_docs = self.retriever.retrieve(query)
+                    
             # Convert to cache entry format
             relevant_entries = []
             for doc in relevant_docs:
@@ -91,26 +67,13 @@ class CAGEngine:
             
             # Generate response using LLM
             response = get_llm_response_with_cache(query, relevant_entries)
-            
-            # Log analytics
-            response_time = time.time() - start_time
-            hit_type = 'hit' if relevant_entries else 'miss'
-            
-            for entry in relevant_entries:
-                if entry.get('chunk_id'):
-                    self.cache_analytics.log_cache_access(
-                        entry['chunk_id'], query, response_time, hit_type
-                    )
-            
+    
             return response
             
         except Exception as e:
             return f"Error generating response: {e}"
     
     def generate_batch_answers(self, queries, document_url=None):
-        """Generate answers for multiple queries using batch processing"""
-        import time
-        start_time = time.time()
         responses = []
         
         try:
@@ -120,27 +83,17 @@ class CAGEngine:
             elif not self.retriever:
                 raise ValueError("No document URL provided and no retriever initialized")
             
-            # Ensure retrievers are initialized
-            if not self.retriever or not self.adaptive_retriever:
-                raise ValueError("Retrievers not properly initialized")
             
             # Process each query
             for i, query in enumerate(queries):
-                query_start_time = time.time()
-                print(f"Processing query {i+1}/{len(queries)}: {query}")
                 
                 try:
-                    # Enhance query
-                    enhanced_terms = self.query_processor.enhance_query(query)
-                    intent = self.query_processor.detect_query_intent(query)
-                    
-                    # Use adaptive retrieval
-                    relevant_docs = self.adaptive_retriever.retrieve_with_adaptation(
-                        query, top_k=5
-                    )
+                    # Retrieve relevant documents using the retriever
+                    relevant_docs = self.retriever.retrieve(query)
                     
                     # Convert to cache entry format
                     relevant_entries = []
+                    
                     for doc in relevant_docs:
                         entry = {
                             'text_snippet': doc.page_content,
@@ -152,33 +105,10 @@ class CAGEngine:
                     # Generate response using LLM
                     response = get_llm_response_with_cache(query, relevant_entries)
                     responses.append(response)
-                    
-                    # Log analytics
-                    response_time = time.time() - query_start_time
-                    hit_type = 'hit' if relevant_entries else 'miss'
-                    
-                    for entry in relevant_entries:
-                        if entry.get('chunk_id'):
-                            self.cache_analytics.log_cache_access(
-                                entry['chunk_id'], query, response_time, hit_type
-                            )
-                            
+                                                        
                 except Exception as e:
                     responses.append(f"Error processing query '{query}': {e}")
             
-            total_time = time.time() - start_time
-            print(f"Batch processing completed in {total_time:.2f} seconds")
-            return responses
-            
         except Exception as e:
             return [f"Error in batch processing: {e}"] * len(queries)
-    
-    def get_cache_report(self):
-        """Get cache performance analytics"""
-        return self.cache_analytics.generate_cache_report()
-    
-    def learn_from_feedback(self, query, feedback_score):
-        """Learn from user feedback"""
-        if self.retriever and self.adaptive_retriever:
-            relevant_docs = self.retriever.retrieve(query, top_k=5)
-            self.adaptive_retriever.learn_from_feedback(query, relevant_docs, feedback_score)
+

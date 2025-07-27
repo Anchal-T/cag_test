@@ -6,7 +6,7 @@ from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.metrics.pairwise import cosine_similarity
 import numpy as np
 from data_processor import preprocess
-from typing import List
+from typing import List, Optional
 
 class TFIDFRetriever(BaseRetriever):
     """Custom retriever that integrates with your existing TF-IDF setup"""
@@ -32,6 +32,11 @@ class CAGHybridRetriever:
         self.chunked_documents = processed_data['chunked_documents']
         self.vectorizer = processed_data['vectorizer']
         self.tfidf_matrix = processed_data['tfidf_matrix_chunks']
+        
+        # Initialize retrievers as class attributes
+        self.bm25_retriever: Optional[BM25Retriever] = None
+        self.tfidf_retriever: Optional[TFIDFRetriever] = None
+        self.ensemble_retriever: Optional[EnsembleRetriever] = None
         
         # Convert to LangChain documents
         self.langchain_docs = [
@@ -71,5 +76,7 @@ class CAGHybridRetriever:
     
     def retrieve(self, query, top_k=5):
         """Main retrieval method"""
+        if self.ensemble_retriever is None:
+            raise ValueError("Ensemble retriever has not been initialized.")
         results = self.ensemble_retriever.invoke(query)
         return results[:top_k]
