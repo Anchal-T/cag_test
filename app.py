@@ -1,34 +1,20 @@
-from flask import Flask, request, jsonify
+from quart import Quart, request, jsonify
 from cag_engine import CAGEngine
 import asyncio
 import functools
 
-app = Flask(__name__)
+app = Quart(__name__)
 
-# Instantiate the engine when the app starts
 cag_engine = CAGEngine()
 
-def async_route(f):
-    """Decorator to handle async functions in Flask routes"""
-    @functools.wraps(f)
-    def wrapper(*args, **kwargs):
-        loop = asyncio.new_event_loop()
-        asyncio.set_event_loop(loop)
-        try:
-            return loop.run_until_complete(f(*args, **kwargs))
-        finally:
-            loop.close()
-    return wrapper
-
 @app.route('/hackrx/run', methods=['POST'])
-@async_route
 async def get_answers():
     """
     API endpoint to process questions against a given document URL.
     Handles requests asynchronously for improved performance.
     """
     try:
-        data = request.get_json()
+        data = await request.get_json()
         if not data:
             return jsonify({"error": "No JSON data provided"}), 400
         
@@ -66,7 +52,6 @@ def health_check():
     """Health check endpoint to confirm the server is running."""
     return jsonify({"status": "healthy"}), 200
 
-# Remove the run() function or rename it to avoid conflicts
 def start_app():
     app.run(host='127.0.0.1', port=5000, debug=False, threaded=True)
 
