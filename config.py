@@ -24,8 +24,8 @@ LLM_MODEL_NAME = "gemini-2.5-flash"
 EMBEDDING_MODEL_NAME = "sentence-transformers/all-MiniLM-L6-v2"
 
 # --- CAG Specific ---
-CHUNK_SIZE = 512
-CHUNK_OVERLAP = 100
+CHUNK_SIZE = 1024
+CHUNK_OVERLAP = 212
 
 # --- Gemini API Key (Loaded from .env) ---
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
@@ -34,5 +34,4 @@ if not GEMINI_API_KEY:
 
 USE_LANGCHAIN_HYBRID = True
 BM25_WEIGHT = 0.7
-TFIDF_WEIGHT = 0.3
 HYBRID_TOP_K = 5
