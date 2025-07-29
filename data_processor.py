@@ -7,7 +7,6 @@ import pickle
 import os
 import requests
 import fitz
-from sklearn.feature_extraction.text import TfidfVectorizer
 from config import PERSISTENCE_FILE, CHUNK_SIZE, CHUNK_OVERLAP, DOCUMENT_CACHE_FILE, EMBEDDING_MODEL_NAME, ANNOY_INDEX_FILE
 from tqdm import tqdm
 import re
@@ -110,7 +109,8 @@ def download_and_extract_text(url):
         response = requests.get(url, stream=True, timeout=30)
         response.raise_for_status()
         with fitz.open(stream=response.content, filetype="pdf") as doc:
-            text = "".join(page.get_text() for page in doc)
+            text_chunks = [page.get_text() for page in doc]
+            text = "".join(text_chunks)
         return text
     except requests.exceptions.RequestException as e:
         print(f"Error downloading {url}: {e}")
@@ -163,22 +163,15 @@ def process_new_document(document_url):
             'text': chunk_text_content
         })
     
-    # Process for TF-IDF
-    raw_texts = [doc['text'] for doc in chunked_documents]
-    vectorizer = TfidfVectorizer(stop_words='english', lowercase=True, min_df=1)
-    tfidf_matrix = vectorizer.fit_transform(raw_texts)
-    
-    # Create Annoy index
+    # Create Annoy index for semantic search
     embeddings = HuggingFaceEmbeddings(model_name=EMBEDDING_MODEL_NAME)
+    raw_texts = [chunk['text'] for chunk in chunked_documents]
     annoy_vector_store = Annoy.from_texts(raw_texts, embeddings)
     annoy_vector_store.save_local(ANNOY_INDEX_FILE)
-
 
     data_to_return = {
         "full_documents": documents,
         "chunked_documents": chunked_documents,
-        "vectorizer": vectorizer,
-        "tfidf_matrix_chunks": tfidf_matrix,
         "annoy_index_file": ANNOY_INDEX_FILE
     }
     
