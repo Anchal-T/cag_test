@@ -16,7 +16,7 @@ from langchain_community.vectorstores import Annoy
 from langchain_huggingface import HuggingFaceEmbeddings
 
 # --- Download NLTK data (only need to do this once) ---
-nltk.download('punkt', quiet=True)
+nltk.download('punkt_tab', quiet=True)
 nltk.download('stopwords', quiet=True)
 nltk.download('wordnet', quiet=True)
 
