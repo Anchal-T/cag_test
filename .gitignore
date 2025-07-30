@@ -9,3 +9,4 @@ document_cache.pkl
 annoy.index
 test_data_processor.py
 test_cache_builder.py
+test_app.py
