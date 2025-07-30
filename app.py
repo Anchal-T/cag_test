@@ -1,13 +1,31 @@
+from torch.utils._cxx_pytree import kwargs
 from quart import Quart, request, jsonify
 from cag_engine import CAGEngine
 import asyncio
 import functools
+from dotenv import load_dotenv
+import os
+import functools
 
+load_dotenv()
 app = Quart(__name__)
 
 cag_engine = CAGEngine()
 
+def validate_bearer_token(f):  
+    @functools.wraps(f)
+    async def wrapper(*args, **kwargs): 
+        auth_header = request.headers.get('Authorization')
+        expected_token = f"Bearer {os.getenv('BEARER_TOKEN')}"
+        
+        if not auth_header or auth_header != expected_token:
+            return jsonify({'error': 'Unauthorized'}), 401
+        
+        return await f(*args, **kwargs)
+    return wrapper
+
 @app.route('/hackrx/run', methods=['POST'])
+@validate_bearer_token
 async def get_answers():
     """
     API endpoint to process questions against a given document URL.
