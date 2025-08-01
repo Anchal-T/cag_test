@@ -7,6 +7,7 @@ from data_processor import preprocess
 from langchain_community.vectorstores import Annoy
 from langchain_huggingface import HuggingFaceEmbeddings
 from config import EMBEDDING_MODEL_NAME
+from flashrank import Ranker, RerankRequest
 
 class AnnoyRetriever(BaseRetriever):
     """
@@ -51,6 +52,7 @@ class CAGHybridRetriever:
         
         # Initialize the individual retrievers and the ensemble retriever.
         self._setup_retrievers(processed_data['annoy_index_file'])
+        self.reranker = Ranker(model_name="ms-marco-MiniLM-L-12-v2", cache_dir="/tmp/flashrank_cache")
     
     def _setup_retrievers(self, annoy_index_file):
         """
@@ -84,7 +86,7 @@ class CAGHybridRetriever:
         # Here, we are giving equal weight to both keyword and semantic search.
         self.ensemble_retriever = EnsembleRetriever(
             retrievers=[self.bm25_retriever, self.annoy_retriever],
-            weights=[0.5, 0.5] # You can tune these weights for better performance.
+            weights=[0.3, 0.7] # You can tune these weights for better performance.
         )
     
     def retrieve(self, query, top_k=5):
@@ -98,5 +100,14 @@ class CAGHybridRetriever:
         # The 'invoke' method of the ensemble retriever runs the query against both retrievers
         # and combines the results based on the weights.
         results = self.ensemble_retriever.invoke(query)
+
+        reranker_request = RerankRequest(query=query, 
+            passages=[{"id": i, "text": doc.page_content} for i, doc in enumerate(results)]
+        )
         
-        return results[:top_k]
+        reranked_results = self.reranker.rerank(reranker_request)
+        final_docs = []
+        for result in reranked_results[:top_k]:
+             final_docs.append(results[result['id']])
+
+        return final_docs

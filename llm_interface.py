@@ -1,5 +1,3 @@
-# File: llm_interface.py
-
 import asyncio
 from google import genai
 from google.genai.types import GenerateContentConfig
@@ -19,11 +17,21 @@ def get_llm_response_with_cache(query, relevant_cache_entries):
 
     cached_text = "\n---\n".join(e.get("text_snippet", "N/A") for e in relevant_cache_entries)
     prompt = f"""
-You are a helpful AI assistant that answers questions based on provided knowledge.
-Pre‑loaded knowledge:
-{cached_text}
+You are an expert Q&A system that is tasked with answering questions about a document.
+You are given a question and a set of text excerpts from the document.
+Your task is to answer the question using ONLY the provided text excerpts.
 
+If the answer is not available in the provided excerpts, you MUST state: "The answer to this question could not be found in the provided context."
+Do not under any circumstances make up an answer or use any external knowledge.
+
+Here are the text excerpts:
+---
+{cached_text}
+---
+
+Here is the question:
 Question: {query}
+
 Answer:
 """
 
@@ -31,7 +39,7 @@ Answer:
         resp = sync_client.models.generate_content(
             model=LLM_MODEL_NAME,
             contents=prompt,
-            config=GenerateContentConfig(max_output_tokens=500, temperature=0.2)
+            config=GenerateContentConfig(temperature=0.2)
         )
         return resp.text.strip()
     except Exception as e:
@@ -44,14 +52,23 @@ async def get_llm_response_async(query, relevant_entries):
 
     cached_text = "\n---\n".join(e.get("text_snippet", "N/A") for e in relevant_entries)
     prompt = f"""
-You are a helpful AI assistant that answers questions based on provided knowledge.
-Pre‑loaded knowledge:
-{cached_text}
+You are an expert Q&A system that is tasked with answering questions about a document.
+You are given a question and a set of text excerpts from the document.
+Your task is to answer the question using ONLY the provided text excerpts.
 
+If the answer is not available in the provided excerpts, you MUST state: "The answer to this question could not be found in the provided context."
+Do not under any circumstances make up an answer or use any external knowledge.
+
+Here are the text excerpts:
+---
+{cached_text}
+---
+
+Here is the question:
 Question: {query}
+
 Answer:
 """
-
     try:
         resp = await async_client.aio.models.generate_content(
             model=LLM_MODEL_NAME,
