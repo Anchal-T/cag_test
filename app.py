@@ -24,7 +24,7 @@ def validate_bearer_token(f):
     return wrapper
 
 @app.route('/hackrx/run', methods=['POST'])
-@validate_bearer_token
+# @validate_bearer_token
 async def get_answers():
     """
     API endpoint to process questions against a given document URL.

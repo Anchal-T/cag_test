@@ -13,6 +13,7 @@ import re
 from datetime import datetime, timedelta
 from langchain_community.vectorstores import Annoy
 from langchain_huggingface import HuggingFaceEmbeddings
+from langchain_text_splitters import RecursiveCharacterTextSplitter
 
 # --- Download NLTK data (only need to do this once) ---
 nltk.download('punkt_tab', quiet=True)
@@ -120,14 +121,15 @@ def download_and_extract_text(url):
         return None
 
 def chunk_text(text, chunk_size=CHUNK_SIZE, overlap=CHUNK_OVERLAP):
-    """Simple text chunking."""
-    words = text.split()
-    chunks = []
-    for i in range(0, len(words), chunk_size - overlap):
-        chunk = ' '.join(words[i:i + chunk_size])
-        if chunk.strip():
-            chunks.append(chunk)
-    return chunks
+    """Chunks text using a recursive character text splitter."""
+    text_splitter = RecursiveCharacterTextSplitter(
+        chunk_size=chunk_size,
+        chunk_overlap=overlap,
+        length_function=len,
+        is_separator_regex=False,
+        separators=["\n\n", "\n", ". ", " ", ""]
+    )
+    return text_splitter.split_text(text)
 
 def make_langchain_compatible(data):
     """Convert existing data format to work with LangChain"""
@@ -154,7 +156,7 @@ def process_new_document(document_url):
     documents = [{'id': document_url, 'text': text}]
     
     # Chunk the document
-    chunks = chunk_text(text)
+    chunks = chunk_text(text) # This now returns a list of strings
     chunked_documents = []
     for i, chunk_text_content in enumerate(chunks):
         chunked_documents.append({
@@ -162,7 +164,7 @@ def process_new_document(document_url):
             'source_doc_id': document_url,
             'text': chunk_text_content
         })
-    
+        
     # Create Annoy index for semantic search
     embeddings = HuggingFaceEmbeddings(model_name=EMBEDDING_MODEL_NAME)
     raw_texts = [chunk['text'] for chunk in chunked_documents]
